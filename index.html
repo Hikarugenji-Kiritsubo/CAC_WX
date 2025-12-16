@@ -3,8 +3,15 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>CAC_WX | JMA Preview</title>
+
+  <!-- ===== バージョン ===== -->
+  <script>
+    const APP_VERSION = "1.10";
+  </script>
+
+  <title>CAC_WX ver1.10</title>
   <meta name="theme-color" content="#111827" />
+
   <style>
     :root {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
@@ -36,7 +43,13 @@
 
     h1 {
       font-size: 18px;
-      margin: 0 0 6px;
+      margin: 0 0 4px;
+    }
+
+    .version {
+      font-size: 12px;
+      color: #94a3b8;
+      margin-bottom: 8px;
     }
 
     .row {
@@ -98,7 +111,7 @@
       margin-top: 6px;
     }
 
-    /* ===== プレビューグリッド ===== */
+    /* ===== プレビュー ===== */
     .grid {
       margin-top: 14px;
       display: grid;
@@ -114,21 +127,18 @@
       text-decoration: none;
       color: inherit;
     }
-    .tile:hover { border-color: #334155; }
 
     .tileHead {
       padding: 10px 12px;
       border-bottom: 1px solid #1f2937;
       display: flex;
-      align-items: center;
       justify-content: space-between;
-      gap: 10px;
+      align-items: center;
     }
 
     .label {
       font-weight: 900;
       font-size: 13px;
-      color: #e2e8f0;
     }
 
     .open {
@@ -142,12 +152,10 @@
       background: #0b0f19;
     }
 
-    /* ★ Safari 安定用：iframe で PDF 表示 */
     iframe.preview {
       width: 100%;
       height: 100%;
       border: 0;
-      display: block;
       background: #0b0f19;
     }
   </style>
@@ -158,7 +166,8 @@
     <div class="card">
       <div class="row">
         <div>
-          <h1>CAC_WX（AM / PM プレビュー）</h1>
+          <h1>CAC_WX</h1>
+          <div class="version" id="ver"></div>
           <div class="hint" id="hint"></div>
           <div class="danger" id="err"></div>
         </div>
@@ -179,83 +188,66 @@
   </div>
 
 <script>
-  function setPart(part) {
-    window.__part = part;
-    document.body.setAttribute("data-part", part);
+  document.title = `CAC_WX ver${APP_VERSION}`;
+  document.getElementById("ver").textContent = `ver ${APP_VERSION}`;
 
-    document.getElementById("tab-am").classList.toggle("active", part === "AM");
-    document.getElementById("tab-pm").classList.toggle("active", part === "PM");
-
-    refresh();
-  }
-
-  function getPart() {
-    return window.__part || "AM";
-  }
-
-  // JST の「今日」を YYYY-MM-DD で取得
   function todayJST() {
-    const fmt = new Intl.DateTimeFormat("en-CA", {
+    return new Intl.DateTimeFormat("en-CA", {
       timeZone: "Asia/Tokyo",
       year: "numeric",
       month: "2-digit",
       day: "2-digit"
-    });
-    return fmt.format(new Date());
+    }).format(new Date());
+  }
+
+  function setPart(part) {
+    window.__part = part;
+    document.body.setAttribute("data-part", part);
+    document.getElementById("tab-am").classList.toggle("active", part === "AM");
+    document.getElementById("tab-pm").classList.toggle("active", part === "PM");
+    refresh();
   }
 
   function refresh() {
-    const part = getPart();
+    const part = window.__part || "AM";
     const date = todayJST();
 
     document.getElementById("hint").textContent = `JST ${date} / ${part}`;
-    document.getElementById("err").textContent = "";
-
-    document.getElementById("btn-zip").href =
-      `/api/zip?part=${part}&date=${date}`;
-    document.getElementById("btn-merge").href =
-      `/api/merge?part=${part}&date=${date}`;
+    document.getElementById("btn-zip").href = `/api/zip?part=${part}&date=${date}`;
+    document.getElementById("btn-merge").href = `/api/merge?part=${part}&date=${date}`;
 
     fetch(`/api/urls?part=${part}&date=${date}`)
-      .then(r => r.ok ? r.json() : Promise.reject(r))
+      .then(r => r.json())
       .then(data => {
-        const urls = data.urls || [];
         const grid = document.getElementById("grid");
-
-        // ★ Safari対策：一度完全に消す
         grid.innerHTML = "";
 
-        // ★ 1フレーム待ってから再描画
-        requestAnimationFrame(() => {
-          urls.forEach(u => {
-            const a = document.createElement("a");
-            a.className = "tile";
-            a.href = u.url;
-            a.target = "_blank";
-            a.rel = "noopener";
+        data.urls.forEach(u => {
+          const viewer =
+            "https://docs.google.com/gview?embedded=1&url=" +
+            encodeURIComponent(u.url);
 
-            a.innerHTML = `
-              <div class="tileHead">
-                <div class="label">${u.label}</div>
-                <div class="open">開く</div>
-              </div>
-              <div class="frameWrap">
-                <iframe
-                  class="preview"
-                  src="${u.url}"
-                  loading="lazy"
-                  referrerpolicy="no-referrer">
-                </iframe>
-              </div>
-            `;
+          const a = document.createElement("a");
+          a.className = "tile";
+          a.href = u.url;
+          a.target = "_blank";
+          a.rel = "noopener";
 
-            grid.appendChild(a);
-          });
+          a.innerHTML = `
+            <div class="tileHead">
+              <div class="label">${u.label}</div>
+              <div class="open">開く</div>
+            </div>
+            <div class="frameWrap">
+              <iframe class="preview" src="${viewer}"></iframe>
+            </div>
+          `;
+          grid.appendChild(a);
         });
       })
       .catch(() => {
         document.getElementById("err").textContent =
-          "データ取得に失敗しました。";
+          "プレビューの取得に失敗しました";
       });
   }
 
