@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <script>
-    const APP_VERSION = "2025.12.16-1";
+    const APP_VERSION = "2025.12.16-2";
   </script>
 
-  <title>CAC_WX ver2025.12.16-1</title>
+  <title>CAC_WX ver2025.12.16-2</title>
 
   <style>
     :root {
@@ -16,15 +16,11 @@
         "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
     }
 
-    body {
-      margin: 0;
-      color: #e5e7eb;
-      transition: background .25s ease;
-    }
+    body { margin: 0; color: #e5e7eb; transition: background .25s ease; }
     body[data-part="AM"] { background: #0b0f19; }
     body[data-part="PM"] { background: #0c1224; }
 
-    .wrap { max-width: 1000px; margin: 0 auto; padding: 18px; }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 18px; }
     .card {
       background: #111827;
       border: 1px solid #1f2937;
@@ -36,13 +32,7 @@
     h1 { font-size: 18px; margin: 0; }
     .version { font-size: 12px; color: #94a3b8; margin-bottom: 10px; }
 
-    .row {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      align-items: center;
-      justify-content: space-between;
-    }
+    .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between; }
 
     .tabs {
       display: inline-flex;
@@ -59,10 +49,7 @@
       cursor: pointer;
       font-weight: 800;
     }
-    .tab.active {
-      background: #2563eb;
-      color: white;
-    }
+    .tab.active { background: #2563eb; color: white; }
 
     .btn {
       padding: 10px 12px;
@@ -79,31 +66,43 @@
       color: #052e16;
     }
 
-    .grid {
-      margin-top: 14px;
-      display: grid;
-      gap: 12px;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    }
+    .grid { margin-top: 14px; display:grid; gap:12px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
 
     .tile {
       background: #0b1220;
       border: 1px solid #1f2937;
       border-radius: 14px;
-      padding: 14px;
+      overflow: hidden;
       text-decoration: none;
       color: inherit;
-      display: block;
+      display:block;
     }
     .tile:hover { border-color: #334155; }
 
+    .thumbWrap {
+      height: 220px;
+      background: #0b0f19;
+      border-bottom: 1px solid #1f2937;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      overflow:hidden;
+    }
+    img.thumb {
+      width: 100%;
+      height: 100%;
+      object-fit: cover; /* 図を「それっぽく」見せる */
+      display:block;
+    }
+    .thumbFallback {
+      font-size: 12px;
+      color: #94a3b8;
+      padding: 12px;
+    }
+
+    .meta { padding: 12px; }
     .label { font-weight: 900; font-size: 14px; margin-bottom: 6px; }
     .url { font-size: 11px; color: #94a3b8; word-break: break-all; }
-
-    .icon {
-      font-size: 28px;
-      margin-bottom: 6px;
-    }
   </style>
 </head>
 
@@ -153,10 +152,8 @@
     const part = window.__part || "AM";
     const date = todayJST();
 
-    document.getElementById("btn-zip").href =
-      `/api/zip?part=${part}&date=${date}`;
-    document.getElementById("btn-merge").href =
-      `/api/merge?part=${part}&date=${date}`;
+    document.getElementById("btn-zip").href = `/api/zip?part=${part}&date=${date}`;
+    document.getElementById("btn-merge").href = `/api/merge?part=${part}&date=${date}`;
 
     fetch(`/api/urls?part=${part}&date=${date}&v=${Date.now()}`)
       .then(r => r.json())
@@ -169,11 +166,27 @@
           a.className = "tile";
           a.href = u.url;
           a.target = "_blank";
+          a.rel = "noopener";
+
+          const thumbUrl = `/api/thumb?u=${encodeURIComponent(u.url)}`;
+
           a.innerHTML = `
-            <div class="icon">📄</div>
-            <div class="label">${u.label}</div>
-            <div class="url">${u.url}</div>
+            <div class="thumbWrap">
+              <img class="thumb" src="${thumbUrl}" loading="lazy" alt="${u.label}">
+            </div>
+            <div class="meta">
+              <div class="label">${u.label}</div>
+              <div class="url">${u.url}</div>
+            </div>
           `;
+
+          // 画像生成に失敗したらフォールバック表示
+          const img = a.querySelector("img.thumb");
+          img.onerror = () => {
+            const wrap = a.querySelector(".thumbWrap");
+            wrap.innerHTML = `<div class="thumbFallback">プレビュー生成失敗（タップでPDFを開けます）</div>`;
+          };
+
           grid.appendChild(a);
         });
       });
