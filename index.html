@@ -3,174 +3,140 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>CAC_WX | JMA URL + Zip/PDF Merge</title>
+  <title>CAC_WX | JMA Preview</title>
   <meta name="theme-color" content="#111827" />
   <style>
     :root { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Helvetica Neue", Arial, sans-serif; }
-    body { margin: 0; background: #0b0f19; color: #e5e7eb; }
-    .wrap { max-width: 980px; margin: 0 auto; padding: 18px; }
+    body { margin: 0; color: #e5e7eb; transition: background .25s ease; }
+    body[data-part="AM"] { background: #0b0f19; }
+    body[data-part="PM"] { background: #0c1224; } /* AMより少しだけ色味を変える */
+
+    .wrap { max-width: 1040px; margin: 0 auto; padding: 18px; }
     .card { background: #111827; border: 1px solid #1f2937; border-radius: 14px; padding: 16px; box-shadow: 0 6px 20px rgba(0,0,0,.25); }
     h1 { font-size: 18px; margin: 0 0 14px; }
-    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
     .tabs { display: inline-flex; background: #0b1220; border: 1px solid #1f2937; border-radius: 12px; overflow: hidden; }
-    .tab { padding: 10px 14px; border: 0; background: transparent; color: #cbd5e1; cursor: pointer; font-weight: 700; }
+    .tab { padding: 10px 14px; border: 0; background: transparent; color: #cbd5e1; cursor: pointer; font-weight: 800; }
     .tab.active { background: #2563eb; color: white; }
-    label { font-size: 12px; color: #cbd5e1; display: block; margin-bottom: 6px; }
-    input[type="date"] { padding: 10px 12px; border-radius: 12px; border: 1px solid #1f2937; background: #0b1220; color: #e5e7eb; }
-    .btn { padding: 10px 12px; border-radius: 12px; border: 1px solid #1f2937; background: #0b1220; color: #e5e7eb; cursor: pointer; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
+
+    .btn { padding: 10px 12px; border-radius: 12px; border: 1px solid #1f2937; background: #0b1220; color: #e5e7eb; cursor: pointer; font-weight: 800; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
     .btn.primary { background: #22c55e; border-color: #16a34a; color: #052e16; }
     .btn:active { transform: translateY(1px); }
+
     .hint { font-size: 12px; color: #94a3b8; margin-top: 10px; }
-    .list { margin-top: 14px; display: grid; gap: 10px; }
-    .item { padding: 12px; border: 1px solid #1f2937; border-radius: 14px; background: #0b1220; }
-    .top { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; justify-content: space-between; }
-    .label { font-weight: 800; color: #e2e8f0; }
-    a.link { color: #93c5fd; word-break: break-all; }
-    .actions { display: inline-flex; gap: 8px; }
-    .small { padding: 8px 10px; border-radius: 10px; font-size: 12px; }
-    .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: 18px; background: rgba(17,24,39,.95); border: 1px solid #1f2937; padding: 10px 12px; border-radius: 12px; color: #e5e7eb; display:none; }
-    .danger { color: #fca5a5; font-size: 12px; }
+    .danger { color: #fca5a5; font-size: 12px; margin-top: 8px; }
+
+    /* プレビューのグリッド */
+    .grid { margin-top: 14px; display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+    .tile { background: #0b1220; border: 1px solid #1f2937; border-radius: 14px; overflow: hidden; text-decoration: none; color: inherit; }
+    .tile:hover { border-color: #334155; }
+    .tileHead { padding: 10px 12px; border-bottom: 1px solid #1f2937; display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .label { font-weight: 900; color: #e2e8f0; font-size: 13px; }
+    .open { font-size: 12px; color: #93c5fd; font-weight: 800; }
+    .frameWrap { height: 240px; background: #0b0f19; }
+
+    /* PDFプレビュー（iPad含む）。見えない場合はタップで開けるのでOK */
+    object.preview, iframe.preview {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      display: block;
+      background: #0b0f19;
+    }
+    .fallback { padding: 14px; font-size: 12px; color: #cbd5e1; }
   </style>
 </head>
-<body>
+<body data-part="AM">
   <div class="wrap">
     <div class="card">
-      <h1>CAC_WX（AM/PM URL一覧 + 一括Zip + PDF結合）</h1>
+      <div class="row">
+        <div>
+          <h1 style="margin:0;">CAC_WX（AM/PM プレビュー + 一括DL）</h1>
+          <div class="hint" id="hint"></div>
+          <div class="danger" id="err"></div>
+        </div>
 
-      <div class="row" style="justify-content: space-between;">
         <div class="row">
           <div class="tabs" role="tablist" aria-label="AM PM tabs">
             <button class="tab active" id="tab-am" aria-selected="true">AM</button>
             <button class="tab" id="tab-pm" aria-selected="false">PM</button>
           </div>
 
-          <div>
-            <label for="date">日付（JST）</label>
-            <input id="date" type="date" />
-          </div>
-
-          <button class="btn" id="btn-generate">更新</button>
-        </div>
-
-        <div class="row">
           <a class="btn primary" id="btn-zip" href="#" target="_blank" rel="noopener">Zipで一括DL</a>
           <a class="btn primary" id="btn-merge" href="#" target="_blank" rel="noopener">結合PDFをDL</a>
-          <button class="btn" id="btn-copy-all">URL全部コピー</button>
         </div>
       </div>
 
-      <div class="hint" id="hint"></div>
-      <div class="danger" id="err"></div>
-
-      <div class="list" id="list"></div>
+      <div class="grid" id="grid"></div>
     </div>
   </div>
 
-  <div class="toast" id="toast">Copied</div>
-
 <script>
-  function pad2(n){ return String(n).padStart(2, "0"); }
-
-  function todayYYYYMMDD(){
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = pad2(now.getMonth()+1);
-    const d = pad2(now.getDate());
-    return `${y}-${m}-${d}`;
-  }
-
-  async function copyText(text){
-    try{
-      await navigator.clipboard.writeText(text);
-      toast("コピーしました");
-    }catch(e){
-      const ta = document.createElement("textarea");
-      ta.value = text;
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand("copy");
-      document.body.removeChild(ta);
-      toast("コピーしました");
-    }
-  }
-
-  function toast(msg){
-    const t = document.getElementById("toast");
-    t.textContent = msg;
-    t.style.display = "block";
-    clearTimeout(window.__toastTimer);
-    window.__toastTimer = setTimeout(()=> t.style.display="none", 1200);
-  }
-
   function setPart(part){
     window.__part = part;
+    document.body.setAttribute("data-part", part);
+
     document.getElementById("tab-am").classList.toggle("active", part==="AM");
     document.getElementById("tab-pm").classList.toggle("active", part==="PM");
     document.getElementById("tab-am").setAttribute("aria-selected", part==="AM");
     document.getElementById("tab-pm").setAttribute("aria-selected", part==="PM");
+
     refresh();
   }
-
   function getPart(){ return window.__part || "AM"; }
+
+  // JSTの「今日」を YYYY-MM-DD で返す（端末タイムゾーンに依存しない）
+  function todayJST(){
+    const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo", year:"numeric", month:"2-digit", day:"2-digit" });
+    return fmt.format(new Date()); // en-CA は YYYY-MM-DD 形式
+  }
 
   function refresh(){
     const part = getPart();
-    const date = document.getElementById("date").value;
-    if(!date) return;
+    const date = todayJST();
 
-    // ダウンロードリンク（Vercel Serverless API）
+    document.getElementById("hint").textContent = `JST: ${date} / ${part}`;
+    document.getElementById("err").textContent = "";
+
     document.getElementById("btn-zip").href = `/api/zip?part=${encodeURIComponent(part)}&date=${encodeURIComponent(date)}`;
     document.getElementById("btn-merge").href = `/api/merge?part=${encodeURIComponent(part)}&date=${encodeURIComponent(date)}`;
-
-    document.getElementById("err").textContent = "";
-    document.getElementById("hint").textContent = `表示: ${date} / ${part}`;
 
     fetch(`/api/urls?part=${encodeURIComponent(part)}&date=${encodeURIComponent(date)}`)
       .then(r => r.ok ? r.json() : r.text().then(t => { throw new Error(t || r.statusText); }))
       .then(data => {
         const urls = data.urls || [];
-        const el = document.getElementById("list");
-        el.innerHTML = "";
+        const grid = document.getElementById("grid");
+        grid.innerHTML = "";
 
-        urls.forEach(u=>{
-          const div = document.createElement("div");
-          div.className = "item";
-          div.innerHTML = `
-            <div class="top">
+        urls.forEach(u => {
+          const a = document.createElement("a");
+          a.className = "tile";
+          a.href = u.url;
+          a.target = "_blank";
+          a.rel = "noopener";
+
+          a.innerHTML = `
+            <div class="tileHead">
               <div class="label">${u.label}</div>
-              <div class="actions">
-                <button class="btn small" data-copy="${encodeURIComponent(u.url)}">コピー</button>
-                <a class="btn small" href="${u.url}" target="_blank" rel="noopener">開く</a>
-              </div>
+              <div class="open">開く</div>
             </div>
-            <div style="margin-top:8px;">
-              <a class="link" href="${u.url}" target="_blank" rel="noopener noreferrer">${u.url}</a>
+            <div class="frameWrap">
+              <object class="preview" data="${u.url}" type="application/pdf">
+                <div class="fallback">
+                  プレビュー非対応の環境です。タップするとPDFを開きます。
+                </div>
+              </object>
             </div>
           `;
-          el.appendChild(div);
-        });
 
-        el.querySelectorAll("button[data-copy]").forEach(btn=>{
-          btn.addEventListener("click", ()=>{
-            const url = decodeURIComponent(btn.getAttribute("data-copy"));
-            copyText(url);
-          });
+          grid.appendChild(a);
         });
-
-        // URL全部コピー
-        document.getElementById("btn-copy-all").onclick = ()=>{
-          const text = urls.map(x => x.url).join("\n");
-          copyText(text);
-        };
       })
-      .catch(err=>{
+      .catch(err => {
         document.getElementById("err").textContent = `エラー: ${err.message}`;
       });
   }
 
-  document.getElementById("date").value = todayYYYYMMDD();
-  document.getElementById("btn-generate").addEventListener("click", refresh);
-  document.getElementById("date").addEventListener("change", refresh);
   document.getElementById("tab-am").addEventListener("click", ()=> setPart("AM"));
   document.getElementById("tab-pm").addEventListener("click", ()=> setPart("PM"));
 
