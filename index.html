@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>JMA URL List (AM/PM)</title>
+  <meta name="theme-color" content="#111827" />
+  <style>
+    :root { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Helvetica Neue", Arial, sans-serif; }
+    body { margin: 0; background: #0b0f19; color: #e5e7eb; }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 18px; }
+    .card { background: #111827; border: 1px solid #1f2937; border-radius: 14px; padding: 16px; box-shadow: 0 6px 20px rgba(0,0,0,.25); }
+    h1 { font-size: 18px; margin: 0 0 14px; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .tabs { display: inline-flex; background: #0b1220; border: 1px solid #1f2937; border-radius: 12px; overflow: hidden; }
+    .tab { padding: 10px 14px; border: 0; background: transparent; color: #cbd5e1; cursor: pointer; font-weight: 600; }
+    .tab.active { background: #2563eb; color: white; }
+    label { font-size: 12px; color: #cbd5e1; display: block; margin-bottom: 6px; }
+    input[type="date"] { padding: 10px 12px; border-radius: 12px; border: 1px solid #1f2937; background: #0b1220; color: #e5e7eb; }
+    .btn { padding: 10px 12px; border-radius: 12px; border: 1px solid #1f2937; background: #0b1220; color: #e5e7eb; cursor: pointer; font-weight: 600; }
+    .btn.primary { background: #22c55e; border-color: #16a34a; color: #052e16; }
+    .btn:active { transform: translateY(1px); }
+    .hint { font-size: 12px; color: #94a3b8; margin-top: 10px; }
+    .list { margin-top: 14px; display: grid; gap: 10px; }
+    .item { padding: 12px; border: 1px solid #1f2937; border-radius: 14px; background: #0b1220; }
+    .top { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; justify-content: space-between; }
+    .label { font-weight: 700; color: #e2e8f0; }
+    a { color: #93c5fd; word-break: break-all; }
+    .actions { display: inline-flex; gap: 8px; }
+    .small { padding: 8px 10px; border-radius: 10px; font-size: 12px; }
+    .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: 18px; background: rgba(17,24,39,.95); border: 1px solid #1f2937; padding: 10px 12px; border-radius: 12px; color: #e5e7eb; display:none; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>JMA PDF URL一覧（AM/PM切替）</h1>
+
+      <div class="row" style="justify-content: space-between;">
+        <div class="row">
+          <div class="tabs" role="tablist" aria-label="AM PM tabs">
+            <button class="tab active" id="tab-am" aria-selected="true">AM</button>
+            <button class="tab" id="tab-pm" aria-selected="false">PM</button>
+          </div>
+
+          <div>
+            <label for="date">日付（JST）</label>
+            <input id="date" type="date" />
+          </div>
+
+          <button class="btn" id="btn-generate">生成</button>
+        </div>
+
+        <div class="row">
+          <button class="btn primary" id="btn-copy-all">すべてコピー</button>
+        </div>
+      </div>
+
+      <div class="hint" id="hint"></div>
+
+      <div class="list" id="list"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast">Copied</div>
+
+<script>
+  // 固定URL（AM/PM共通）
+  const FIXED = [
+    ["AUPQ78 (1200UTC)", "https://www.jma.go.jp/bosai/numericmap/data/nwpmap/aupq78_12.pdf"],
+    ["AUPQ35 (1200UTC)", "https://www.jma.go.jp/bosai/numericmap/data/nwpmap/aupq35_12.pdf"],
+    ["AXFE578 (1200UTC)", "https://www.jma.go.jp/bosai/numericmap/data/nwpmap/axfe578_12.pdf"],
+    ["FXFE502 (1200UTC)", "https://www.jma.go.jp/bosai/numericmap/data/nwpmap/fxfe502_12.pdf"],
+    ["FXFE5782 (1200UTC)", "https://www.jma.go.jp/bosai/numericmap/data/nwpmap/fxfe5782_12.pdf"],
+    ["FXJP854 (1200UTC)", "https://www.jma.go.jp/bosai/numericmap/data/nwpmap/fxjp854_12.pdf"],
+  ];
+
+  function pad2(n){ return String(n).padStart(2, "0"); }
+
+  // JSTの日付（Dateオブジェクト）を受け取り、YYYYMM と YYYYMMDD を作る
+  function toYYYYMM(dateObj){
+    const y = dateObj.getFullYear();
+    const m = pad2(dateObj.getMonth() + 1);
+    return `${y}${m}`;
+  }
+  function toYYYYMMDD(dateObj){
+    const y = dateObj.getFullYear();
+    const m = pad2(dateObj.getMonth() + 1);
+    const d = pad2(dateObj.getDate());
+    return `${y}${m}${d}`;
+  }
+
+  // ASAS URL生成：YYYYMM / ASAS_MONO_YYYYMMDDHHMM.pdf
+  function makeASAS(dateObj, hhmm){
+    const ym = toYYYYMM(dateObj);
+    const ymd = toYYYYMMDD(dateObj);
+    return `https://www.data.jma.go.jp/yoho/data/wxchart/quick/${ym}/ASAS_MONO_${ymd}${hhmm}.pdf`;
+  }
+
+  // dateStr (YYYY-MM-DD) をJSTの「その日」として扱う
+  function parseDateInput(dateStr){
+    // input[type=date] はローカル解釈になりやすいので、明示的に分解して new Date(y,m-1,d) を使う
+    const [y, m, d] = dateStr.split("-").map(Number);
+    return new Date(y, m - 1, d);
+  }
+
+  function addDays(dateObj, days){
+    const d = new Date(dateObj);
+    d.setDate(d.getDate() + days);
+    return d;
+  }
+
+  function buildList(part, selectedDate){
+    // selectedDate は「JSTで選択した日」
+    const prevDay = addDays(selectedDate, -1);
+
+    // 共通：前日1200UTC = 前日付 + 1200
+    const asasPrev1200 = ["ASAS (前日 1200UTC)", makeASAS(prevDay, "1200")];
+
+    let extraASAS;
+    if(part === "AM"){
+      // AM追加：前日1800UTC
+      extraASAS = ["ASAS (前日 1800UTC)", makeASAS(prevDay, "1800")];
+    }else{
+      // PM追加：当日0000UTC
+      extraASAS = ["ASAS (当日 0000UTC)", makeASAS(selectedDate, "0000")];
+    }
+
+    return [asasPrev1200, extraASAS, ...FIXED];
+  }
+
+  async function copyText(text){
+    try{
+      await navigator.clipboard.writeText(text);
+      toast("コピーしました");
+    }catch(e){
+      // iOS等で失敗することがあるのでフォールバック
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+      toast("コピーしました");
+    }
+  }
+
+  function toast(msg){
+    const t = document.getElementById("toast");
+    t.textContent = msg;
+    t.style.display = "block";
+    clearTimeout(window.__toastTimer);
+    window.__toastTimer = setTimeout(()=> t.style.display="none", 1200);
+  }
+
+  function render(){
+    const part = window.__part || "AM";
+    const dateInput = document.getElementById("date").value;
+    if(!dateInput) return;
+
+    const selectedDate = parseDateInput(dateInput);
+    const list = buildList(part, selectedDate);
+
+    // ヒント
+    const prev = addDays(selectedDate, -1);
+    document.getElementById("hint").textContent =
+      `選択日 ${toYYYYMMDD(selectedDate)}（${part}） / ASASは「前日1200UTC」＋「${part==="AM" ? "前日1800UTC" : "当日0000UTC"}」を生成`;
+
+    // リスト描画
+    const el = document.getElementById("list");
+    el.innerHTML = "";
+    list.forEach(([label, url])=>{
+      const div = document.createElement("div");
+      div.className = "item";
+      div.innerHTML = `
+        <div class="top">
+          <div class="label">${label}</div>
+          <div class="actions">
+            <button class="btn small" data-copy="${encodeURIComponent(url)}">コピー</button>
+            <button class="btn small" data-open="${encodeURIComponent(url)}">開く</button>
+          </div>
+        </div>
+        <div style="margin-top:8px;">
+          <a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>
+        </div>
+      `;
+      el.appendChild(div);
+    });
+
+    // ボタンイベント
+    el.querySelectorAll("button[data-copy]").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const url = decodeURIComponent(btn.getAttribute("data-copy"));
+        copyText(url);
+      });
+    });
+    el.querySelectorAll("button[data-open]").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const url = decodeURIComponent(btn.getAttribute("data-open"));
+        window.open(url, "_blank", "noopener");
+      });
+    });
+  }
+
+  function setPart(part){
+    window.__part = part;
+    document.getElementById("tab-am").classList.toggle("active", part==="AM");
+    document.getElementById("tab-pm").classList.toggle("active", part==="PM");
+    document.getElementById("tab-am").setAttribute("aria-selected", part==="AM");
+    document.getElementById("tab-pm").setAttribute("aria-selected", part==="PM");
+    render();
+  }
+
+  // 初期化：日付デフォルトをJSTの今日にする（ブラウザのローカルがJST想定。違う場合は手入力でOK）
+  function todayYYYYMMDD(){
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = pad2(now.getMonth()+1);
+    const d = pad2(now.getDate());
+    return `${y}-${m}-${d}`;
+  }
+
+  document.getElementById("date").value = todayYYYYMMDD();
+  document.getElementById("btn-generate").addEventListener("click", render);
+  document.getElementById("date").addEventListener("change", render);
+
+  document.getElementById("tab-am").addEventListener("click", ()=> setPart("AM"));
+  document.getElementById("tab-pm").addEventListener("click", ()=> setPart("PM"));
+
+  document.getElementById("btn-copy-all").addEventListener("click", ()=>{
+    const part = window.__part || "AM";
+    const selectedDate = parseDateInput(document.getElementById("date").value);
+    const list = buildList(part, selectedDate);
+    const text = list.map(([,url])=>url).join("\n");
+    copyText(text);
+  });
+
+  setPart("AM");
+</script>
+</body>
+</html>
